@@ -1,0 +1,142 @@
+-- Ссылки на сервисы
+local TweenService = game:GetService("TweenService")
+local players = game:GetService("Players")
+local localPlayer = players.LocalPlayer
+
+-- Создаем основную графическую оболочку
+local screenGui = script.Parent
+screenGui.ResetOnSpawn = false
+
+-- Главный фрейм (Задний фон меню)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainHub"
+mainFrame.Size = UDim2.new(0, 450, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -225, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+-- Скругление углов для главного фрейма
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+-- Блок для размещения картинки (Плейсхолдер)
+local imageLabel = Instance.new("ImageLabel")
+imageLabel.Name = "MenuImage"
+imageLabel.Size = UDim2.new(0, 120, 0, 120)
+imageLabel.Position = UDim2.new(0, 20, 0, 20)
+imageLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+imageLabel.BorderSizePixel = 0
+-- НАСТРОЙКА КАРТИНКИ: Замените ID ниже на ваш одобренный Asset ID из Roblox
+imageLabel.Image = "rbxassetid://0" 
+imageLabel.Parent = mainFrame
+
+local imageCorner = Instance.new("UICorner")
+imageCorner.CornerRadius = UDim.new(0, 8)
+imageCorner.Parent = imageLabel
+
+---------------------------------------------------------
+-- СОЗДАНИЕ СТРАНИЦ (МЕНЮ)
+---------------------------------------------------------
+
+-- Контейнер для страниц
+local pagesContainer = Instance.new("Frame")
+pagesContainer.Name = "Pages"
+pagesContainer.Size = UDim2.new(0, 270, 0, 200)
+pagesContainer.Position = UDim2.new(0, 160, 0, 20)
+pagesContainer.BackgroundTransparency = 1
+pagesContainer.Parent = mainFrame
+
+-- Первая страница (Основное меню)
+local page1 = Instance.new("Frame")
+page1.Name = "MainMenu"
+page1.Size = UDim2.new(1, 0, 1, 0)
+page1.BackgroundTransparency = 1
+page1.Visible = true -- По умолчанию открыта
+page1.Parent = pagesContainer
+
+local title1 = Instance.new("TextLabel")
+title1.Text = "Основное Меню"
+title1.Size = UDim2.new(1, 0, 0, 30)
+title1.TextColor3 = Color3.fromRGB(255, 255, 255)
+title1.Font = Enum.Font.GothamBold
+title1.TextSize = 18
+title1.BackgroundTransparency = 1
+title1.Parent = page1
+
+-- Вторая страница (Другие прибамбасы / Настройки)
+local page2 = Instance.new("Frame")
+page2.Name = "SecondMenu"
+page2.Size = UDim2.new(1, 0, 1, 0)
+page2.BackgroundTransparency = 1
+page2.Visible = false -- По умолчанию скрыта
+page2.Parent = pagesContainer
+
+local title2 = Instance.new("TextLabel")
+title2.Text = "Доп. Функции"
+title2.Size = UDim2.new(1, 0, 0, 30)
+title2.TextColor3 = Color3.fromRGB(255, 255, 255)
+title2.Font = Enum.Font.GothamBold
+title2.TextSize = 18
+title2.BackgroundTransparency = 1
+title2.Parent = page2
+
+---------------------------------------------------------
+-- КНОПКИ НАВИГАЦИИ (ПЕРЕКЛЮЧАТЕЛИ)
+---------------------------------------------------------
+
+-- Функция для быстрого создания красивых кнопок
+local function createNavButton(name, text, position, parent)
+	local button = Instance.new("TextButton")
+	button.Name = name
+	button.Size = UDim2.new(0, 120, 0, 35)
+	button.Position = position
+	button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	button.Text = text
+	button.TextColor3 = Color3.fromRGB(230, 230, 230)
+	button.Font = Enum.Font.GothamRefined
+	button.TextSize = 14
+	button.BorderSizePixel = 0
+	button.Parent = parent
+
+	local buttonCorner = Instance.new("UICorner")
+	buttonCorner.CornerRadius = UDim.new(0, 6)
+	buttonCorner.Parent = button
+	
+	-- Анимация наведения мыши
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 70, 85)}):Play()
+	end)
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}):Play()
+	end)
+	
+	return button
+end
+
+-- Создаем кнопки переключения в левой части под картинкой
+local btnOpenPage1 = createNavButton("ToPage1", "Главная", UDim2.new(0, 20, 0, 160), mainFrame)
+local btnOpenPage2 = createNavButton("ToPage2", "Прибамбасы", UDim2.new(0, 20, 0, 205), mainFrame)
+
+---------------------------------------------------------
+-- ЛОГИКА ПЕРЕКЛЮЧЕНИЯ И НАСТРОЙКИ КНОПОК
+---------------------------------------------------------
+
+-- Метод переключения видимости страниц
+local function showPage(targetPage)
+	for _, page in ipairs(pagesContainer:GetChildren()) do
+		if page:IsA("Frame") then
+			page.Visible = (page == targetPage)
+		end
+	end
+end
+
+-- Назначаем действия кнопкам
+btnOpenPage1.MouseButton1Click:Connect(function()
+	showPage(page1) -- Включает первое GUI
+end)
+
+btnOpenPage2.MouseButton1Click:Connect(function()
+	showPage(page2) -- Включает второе GUI с прибамбасами
+end)
