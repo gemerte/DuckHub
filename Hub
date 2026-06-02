@@ -1,142 +1,926 @@
--- Ссылки на сервисы
-local TweenService = game:GetService("TweenService")
-local players = game:GetService("Players")
-local localPlayer = players.LocalPlayer
+-- =============================================================================
+-- 1. ИНИЦИАЛИЗАЦИЯ И ОСНОВНОЙ ФРЕЙМ ХУБА
+-- =============================================================================
 
--- Создаем основную графическую оболочку
-local screenGui = script.Parent
+-- Проверяем, куда лучше спрятать GUI (в CoreGui для беспалевности или в StarterGui)
+local parentGui = game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+-- Защита от дублирования: удаляем старый интерфейс, если он уже запущен
+if parentGui:FindFirstChild("MyCustomHub") then
+	parentGui["MyCustomHub"]:Destroy()
+end
+
+-- Создаем ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MyCustomHub"
 screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = parentGui
+
+-- =============================================================================
+-- ЭФФЕКТ ЗАГРУЗКИ (СЕРЫЙ ЭКРАН + ЛУННАЯ АНИМАЦИЯ)
+-- =============================================================================
+local TweenService = game:GetService("TweenService")
+
+-- Создаем серый полноэкранный фон
+local loadingOverlay = Instance.new("Frame")
+loadingOverlay.Name = "LoadingOverlay"
+loadingOverlay.Size = UDim2.new(1, 0, 1, 0)
+loadingOverlay.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+loadingOverlay.BackgroundTransparency = 1 -- Изначально прозрачный
+loadingOverlay.ZIndex = 99999 -- Поверх абсолютно всего
+loadingOverlay.Parent = screenGui
+
+-- Текст для крутящихся лунных смайликов
+local moonLabel = Instance.new("TextLabel")
+moonLabel.Name = "MoonAnimation"
+moonLabel.Size = UDim2.new(0, 200, 0, 100)
+moonLabel.Position = UDim2.new(0.5, -100, 0.5, -50)
+moonLabel.BackgroundTransparency = 1
+moonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+moonLabel.Font = Enum.Font.GothamBold
+moonLabel.TextSize = 60
+moonLabel.Text = "🌑"
+moonLabel.TextTransparency = 1
+moonLabel.Parent = loadingOverlay
+
+-- Анимация появления серого экрана
+TweenService:Create(loadingOverlay, TweenInfo.new(1), {BackgroundTransparency = 0.2}):Play()
+TweenService:Create(moonLabel, TweenInfo.new(1), {TextTransparency = 0}):Play()
+
+-- Цикл смены лунных смайликов ровно на 999999 секунд
+local moons = {"🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"}
+task.spawn(function()
+	local duration = 4
+	local step = 0.15
+	local elapsed = 0
+	local index = 1
+	
+	while elapsed < duration do
+		moonLabel.Text = moons[index]
+		index = index % #moons + 1
+		task.wait(step)
+		elapsed = elapsed + step
+	end
+	
+	-- Плавно убираем серый экран после окончания 15 секунд
+	TweenService:Create(loadingOverlay, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+	local fadeMoon = TweenService:Create(moonLabel, TweenInfo.new(1), {TextTransparency = 1})
+	fadeMoon:Play()
+	fadeMoon.Completed:Connect(function()
+		loadingOverlay:Destroy()
+	end)
+end)
+
+-- =============================================================================
+-- СОЗДАНИЕ СЕКРЕТНОЙ ПЛАТФОРМЫ (ОБНОВЛЕННЫЕ КООРДИНАТЫ: СЛЕВА, БЛИЖЕ, НИЖЕ)
+-- =============================================================================
+local Workspace = game:GetService("Workspace")
+
+-- Находим начальный остров (в Slap Battles это объект "Lobby" или "Map")
+local lobby = Workspace:FindFirstChild("Lobby") or Workspace:FindFirstChild("Map")
+local spawnPoint = lobby and lobby:FindFirstChildOfClass("SpawnLocation")
+local startPos = spawnPoint and spawnPoint.Position or Vector3.new(0, 0, 0)
+
+-- Удаляем старую платформу, если она существовала под прежним именем, чтобы обновить позицию
+if Workspace:FindFirstChild("SecretFarmPlatform") then
+	Workspace["SecretFarmPlatform"]:Destroy()
+end
+
+-- Генерируем новую платформу по измененным координатам
+local secretPlatform = Instance.new("Part")
+secretPlatform.Name = "SecretFarmPlatform"
+secretPlatform.Size = Vector3.new(50, 2, 50) -- Размер прежний: 50х50 студий
+
+-- Сдвигаем: налево (-1800 по X) и чуть ниже по высоте (+15 по Y, чтобы быть в безопасной зоне над облаками)
+secretPlatform.Position = startPos + Vector3.new(-1800, 15, 0) 
+
+secretPlatform.Material = Enum.Material.Neon
+secretPlatform.Color = Color3.fromRGB(40, 40, 45) -- Темный неоновый стиль хуба
+secretPlatform.Anchored = true
+secretPlatform.Parent = Workspace
 
 -- Главный фрейм (Задний фон меню)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainHub"
-mainFrame.Size = UDim2.new(0, 450, 0, 300)
-mainFrame.Position = UDim2.new(0.5, -225, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.Size = UDim2.new(0, 480, 0, 320)
+mainFrame.Position = UDim2.new(0.5, -240, 0.5, -160)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
--- Скругление углов для главного фрейма
+-- =============================================================================
+-- 2. СИСТЕМА КРАСИВОГО СВОРАЧИВАНИЯ МЕНЮ (АНИМАЦИЯ TWEEN)
+-- =============================================================================
+local TweenService = game:GetService("TweenService")
+
+-- Кнопка сворачивания (в правом верхнем углу главного фрейма)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeButton"
+minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+minimizeBtn.Position = UDim2.new(1, -35, 0, 5)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 14
+minimizeBtn.ZIndex = 10 -- Поверх остальных элементов
+minimizeBtn.Parent = mainFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeBtn
+
+-- Переменные для запоминания исходного размера и состояния
+local isMinimized = false
+local originalSize = UDim2.new(0, 480, 0, 320)
+local minimizedSize = UDim2.new(0, 180, 0, 40) -- Размер полосочки при сворачивании
+local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	
+	if isMinimized then
+		minimizeBtn.Text = "+"
+		
+		-- Плавно скрываем все внутренние элементы меню (боковую панель и страницы)
+		for _, child in ipairs(mainFrame:GetChildren()) do
+			if child:IsA("Frame") then
+				child.Visible = false
+			end
+		end
+		
+		-- Запускаем красивую анимацию сжатия фрейма
+		local shrinkTween = TweenService:Create(mainFrame, tweenInfo, {Size = minimizedSize})
+		shrinkTween:Play()
+	else
+		minimizeBtn.Text = "—"
+		
+		-- Сначала плавно возвращаем исходный размер меню
+		local expandTween = TweenService:Create(mainFrame, tweenInfo, {Size = originalSize})
+		expandTween:Play()
+		
+		-- Ждём окончания анимации перед тем, как показать интерфейс обратно
+		expandTween.Completed:Connect(function()
+			if not isMinimized then -- Проверка на случай, если игрок кликнул слишком быстро
+				for _, child in ipairs(mainFrame:GetChildren()) do
+					-- Показываем обратно боковую панель и контейнер страниц
+					if child.Name == "SidePanel" or child.Name == "Pages" then
+						child.Visible = true
+					end
+				end
+			end
+		end)
+	end
+end)
+
+-- Плавное перетаскивание хуба мышкой (Не блокирует ScrollingFrame и работает для полосочки)
+local UserInputService = game:GetService("UserInputService")
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+	local delta = input.Position - dragStart
+	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+mainFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true; dragStart = input.Position; startPos = mainFrame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then dragging = false end
+		end)
+	end
+end)
+mainFrame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then update(input) end
+end)
+
+-- Скругление углов главного фрейма
 local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.CornerRadius = UDim.new(0, 10)
 mainCorner.Parent = mainFrame
 
--- Блок для размещения картинки (Плейсхолдер)
-local imageLabel = Instance.new("ImageLabel")
-imageLabel.Name = "MenuImage"
-imageLabel.Size = UDim2.new(0, 120, 0, 120)
-imageLabel.Position = UDim2.new(0, 20, 0, 20)
-imageLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-imageLabel.BorderSizePixel = 0
--- НАСТРОЙКА КАРТИНКИ: Замените ID ниже на ваш одобренный Asset ID из Roblox
-imageLabel.Image = "rbxassetid://0" 
-imageLabel.Parent = mainFrame
+-- =============================================================================
+-- 3. СОЗДАНИЕ ВНУТРЕННИХ ПАНЕЛЕЙ И СТРАНИЦ
+-- =============================================================================
 
-local imageCorner = Instance.new("UICorner")
-imageCorner.CornerRadius = UDim.new(0, 8)
-imageCorner.Parent = imageLabel
+-- SidePanel для кнопок (Без картинок)
+local sidePanel = Instance.new("Frame")
+sidePanel.Name = "SidePanel"
+sidePanel.Size = UDim2.new(0, 140, 1, 0)
+sidePanel.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+sidePanel.BorderSizePixel = 0
+sidePanel.Parent = mainFrame
 
----------------------------------------------------------
--- СОЗДАНИЕ СТРАНИЦ (МЕНЮ)
----------------------------------------------------------
+local sideCorner = Instance.new("UICorner")
+sideCorner.CornerRadius = UDim.new(0, 10)
+sideCorner.Parent = sidePanel
 
--- Контейнер для страниц
+-- Контейнер для страниц (справа)
 local pagesContainer = Instance.new("Frame")
 pagesContainer.Name = "Pages"
-pagesContainer.Size = UDim2.new(0, 270, 0, 200)
-pagesContainer.Position = UDim2.new(0, 160, 0, 20)
+pagesContainer.Size = UDim2.new(0, 320, 1, -40)
+pagesContainer.Position = UDim2.new(0, 150, 0, 20)
 pagesContainer.BackgroundTransparency = 1
 pagesContainer.Parent = mainFrame
 
--- Первая страница (Основное меню)
+-- Вкладка 1: Главная
 local page1 = Instance.new("Frame")
 page1.Name = "MainMenu"
 page1.Size = UDim2.new(1, 0, 1, 0)
 page1.BackgroundTransparency = 1
-page1.Visible = true -- По умолчанию открыта
+page1.Visible = true
 page1.Parent = pagesContainer
 
-local title1 = Instance.new("TextLabel")
-title1.Text = "Основное Меню"
-title1.Size = UDim2.new(1, 0, 0, 30)
-title1.TextColor3 = Color3.fromRGB(255, 255, 255)
-title1.Font = Enum.Font.GothamBold
-title1.TextSize = 18
-title1.BackgroundTransparency = 1
-title1.Parent = page1
+local text1 = Instance.new("TextLabel")
+text1.Text = "Добро пожаловать в хаб!"
+text1.Size = UDim2.new(1, 0, 0, 30)
+text1.TextColor3 = Color3.fromRGB(255, 255, 255)
+text1.Font = Enum.Font.GothamBold
+text1.TextSize = 16
+text1.BackgroundTransparency = 1
+text1.Parent = page1
 
--- Вторая страница (Другие прибамбасы / Настройки)
+
+-- =============================================================================
+-- СЮДА ПИСАТЬ ВСЁ ЧТО БЫ БЫЛО ВО ВКЛАДКЕ LOBBY
+-- =============================================================================
+
+
+
+
+
+-- Вкладка 2: Прибамбасы (Функции)
 local page2 = Instance.new("Frame")
 page2.Name = "SecondMenu"
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.BackgroundTransparency = 1
-page2.Visible = false -- По умолчанию скрыта
+page2.Visible = false
 page2.Parent = pagesContainer
 
-local title2 = Instance.new("TextLabel")
-title2.Text = "Доп. Функции"
-title2.Size = UDim2.new(1, 0, 0, 30)
-title2.TextColor3 = Color3.fromRGB(255, 255, 255)
-title2.Font = Enum.Font.GothamBold
-title2.TextSize = 18
-title2.BackgroundTransparency = 1
-title2.Parent = page2
+-- ScrollingFrame, чтобы элементы не вылазили за границы меню
+local scrollPage2 = Instance.new("ScrollingFrame")
+scrollPage2.Size = UDim2.new(1, 0, 1, 0)
+scrollPage2.BackgroundTransparency = 1
+scrollPage2.CanvasSize = UDim2.new(0, 0, 0, 450)
+scrollPage2.ScrollBarThickness = 4
+scrollPage2.BorderSizePixel = 0
+scrollPage2.Parent = page2
 
----------------------------------------------------------
--- КНОПКИ НАВИГАЦИИ (ПЕРЕКЛЮЧАТЕЛИ)
----------------------------------------------------------
+local text2 = Instance.new("TextLabel")
+text2.Text = "Раздел с 🗿разными функциями🗿"
+text2.Size = UDim2.new(1, 0, 0, 30)
+text2.TextColor3 = Color3.fromRGB(255, 255, 255)
+text2.Font = Enum.Font.GothamBold
+text2.TextSize = 16
+text2.BackgroundTransparency = 1
+text2.Parent = scrollPage2
 
--- Функция для быстрого создания красивых кнопок
-local function createNavButton(name, text, position, parent)
-	local button = Instance.new("TextButton")
-	button.Name = name
-	button.Size = UDim2.new(0, 120, 0, 35)
-	button.Position = position
-	button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-	button.Text = text
-	button.TextColor3 = Color3.fromRGB(230, 230, 230)
-	button.Font = Enum.Font.GothamRefined
-	button.TextSize = 14
-	button.BorderSizePixel = 0
-	button.Parent = parent
+-- Конструктор кнопок переключения вкладок
+local function createTabButton(text, position, targetPage)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 110, 0, 35)
+	btn.Position = position
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.Gotham
+	btn.TextSize = 14
+	btn.BorderSizePixel = 0
+	btn.Parent = sidePanel
 
-	local buttonCorner = Instance.new("UICorner")
-	buttonCorner.CornerRadius = UDim.new(0, 6)
-	buttonCorner.Parent = button
-	
-	-- Анимация наведения мыши
-	button.MouseEnter:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 70, 85)}):Play()
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		-- Показываем нужную страницу только если меню не свернуто
+		if not isMinimized then
+			for _, page in ipairs(pagesContainer:GetChildren()) do
+				if page:IsA("Frame") then
+					page.Visible = (page == targetPage)
+				end
+			end
+		end
 	end)
-	button.MouseLeave:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}):Play()
-	end)
-	
-	return button
 end
 
--- Создаем кнопки переключения в левой части под картинкой
-local btnOpenPage1 = createNavButton("ToPage1", "Главная", UDim2.new(0, 20, 0, 160), mainFrame)
-local btnOpenPage2 = createNavButton("ToPage2", "Прибамбасы", UDim2.new(0, 20, 0, 205), mainFrame)
 
----------------------------------------------------------
--- ЛОГИКА ПЕРЕКЛЮЧЕНИЯ И НАСТРОЙКИ КНОПОК
----------------------------------------------------------
+-- =============================================================================
+-- ВКЛАДКА 3: ТЕЛЕПОРТЫ (🌀 TELEPORT)
+-- =============================================================================
+local page3 = Instance.new("Frame")
+page3.Name = "TeleportMenu"
+page3.Size = UDim2.new(1, 0, 1, 0)
+page3.BackgroundTransparency = 1
+page3.Visible = false -- Изначально скрыта, пока не нажмешь на кнопку
+page3.Parent = pagesContainer
 
--- Метод переключения видимости страниц
-local function showPage(targetPage)
-	for _, page in ipairs(pagesContainer:GetChildren()) do
-		if page:IsA("Frame") then
-			page.Visible = (page == targetPage)
-		end
+-- ScrollingFrame для удобного размещения кнопок телепорта
+local scrollPage3 = Instance.new("ScrollingFrame")
+scrollPage3.Size = UDim2.new(1, 0, 1, 0)
+scrollPage3.BackgroundTransparency = 1
+scrollPage3.CanvasSize = UDim2.new(0, 0, 0, 400)
+scrollPage3.ScrollBarThickness = 4
+scrollPage3.BorderSizePixel = 0
+scrollPage3.Parent = page3
+
+local text3 = Instance.new("TextLabel")
+text3.Text = "🌀 Меню телепортации"
+text3.Size = UDim2.new(1, 0, 0, 30)
+text3.TextColor3 = Color3.fromRGB(255, 255, 255)
+text3.Font = Enum.Font.GothamBold
+text3.TextSize = 16
+text3.BackgroundTransparency = 1
+text3.Parent = scrollPage3
+
+
+-- =============================================================================
+-- ВКЛАДКА 3: ВСЕ ЧТО ДОЛЖНО БЫТЬ В ЭТОЙ
+-- =============================================================================
+
+-- =============================================================================
+-- КНОПКА ТЕЛЕПОРТА НА ПЛАТФОРМУ 
+-- =============================================================================
+
+local tpContainer = Instance.new("Frame")
+tpContainer.Name = "TpContainer"
+tpContainer.Size = UDim2.new(0, 280, 0, 40)
+tpContainer.Position = UDim2.new(0, 20, 0, 100) -- Размещаем чуть ниже приветственного текста
+tpContainer.BackgroundTransparency = 1
+tpContainer.Parent = page3 -- ВАЖНО: привязываем именно к page1 (Lobby)
+
+-- Сама синяя кнопка телепортации
+local tpButton = Instance.new("TextButton")
+tpButton.Name = "TpButton"
+tpButton.Size = UDim2.new(0, 280, 0, 40)
+tpButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200) -- Красивый синий цвет
+tpButton.Text = "  Телепорт на Секретную Платформу"
+tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpButton.Font = Enum.Font.GothamBold
+tpButton.TextSize = 14
+tpButton.TextXAlignment = Enum.TextXAlignment.Left
+tpButton.Parent = tpContainer
+
+local tpCorner = Instance.new("UICorner")
+tpCorner.CornerRadius = UDim.new(0, 6)
+tpCorner.Parent = tpButton
+
+-- Логика мгновенного перемещения персонажа
+tpButton.MouseButton1Click:Connect(function()
+	local myChar = game:GetService("Players").LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	
+	-- Ищем созданную платформу в Workspace
+	local secretPlatform = game:GetService("Workspace"):FindFirstChild("SecretFarmPlatform")
+	
+	if myRoot and secretPlatform then
+		-- Безопасный перенос на 5 студий выше центра платформы
+		myRoot.CFrame = secretPlatform.CFrame + Vector3.new(0, 5, 0)
+	end
+end)
+
+
+-- =============================================================================
+-- КНОПКА ТЕЛЕПОРТА В ЦЕНТР ГЛАВНОГО ОСТРОВА (ВКЛАДКА 🌀 TELEPORT)
+-- =============================================================================
+
+-- Создаем контейнер для кнопки внутри третьей страницы (scrollPage3)
+local mainIslandContainer = Instance.new("Frame")
+mainIslandContainer.Name = "MainIslandContainer"
+mainIslandContainer.Size = UDim2.new(0, 280, 0, 40)
+mainIslandContainer.Position = UDim2.new(0, 20, 0, 50) -- Размещаем чуть ниже заголовка вкладки
+mainIslandContainer.BackgroundTransparency = 1
+mainIslandContainer.Parent = scrollPage3 -- Привязываем к прокрутке вкладки Teleport
+
+-- Сама кнопка телепортации
+local mainIslandButton = Instance.new("TextButton")
+mainIslandButton.Name = "MainIslandButton"
+mainIslandButton.Size = UDim2.new(0, 280, 0, 40)
+mainIslandButton.BackgroundColor3 = Color3.fromRGB(220, 100, 0) -- Яркий оранжевый цвет для привлечения внимания
+mainIslandButton.Text = "  Центр Главного Острова"
+mainIslandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainIslandButton.Font = Enum.Font.GothamBold
+mainIslandButton.TextSize = 14
+mainIslandButton.TextXAlignment = Enum.TextXAlignment.Left
+mainIslandButton.Parent = mainIslandContainer
+
+local mainIslandCorner = Instance.new("UICorner")
+mainIslandCorner.CornerRadius = UDim.new(0, 6)
+mainIslandCorner.Parent = mainIslandButton
+
+-- Логика мгновенного перемещения в центр арены
+mainIslandButton.MouseButton1Click:Connect(function()
+	local myChar = game:GetService("Players").LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	
+	if myRoot then
+		-- Сбрасываем текущую физическую скорость, чтобы античит не кикнул за резкое смещение
+		myRoot.Velocity = Vector3.new(0, 0, 0)
+		
+		-- Координаты (0, 0, 0) в Workspace Slap Battles — это и есть точный геометрический центр главной арены.
+		-- Сдвиг по оси Y (+5) плавно опустит персонажа на землю сверху.
+		myRoot.CFrame = CFrame.new(0, 5, 0)
+	end
+end)
+
+
+-- Создаем вкладки (Сдвинуты в самый верх боковой панели)
+createTabButton("Lobby", UDim2.new(0, 15, 0, 20), page1)
+createTabButton("📍Other function📍", UDim2.new(0, 15, 0, 65), page2)
+createTabButton("🌀Teleport🌀", UDim2.new(0, 15, 0, 110), page3)
+createTabButton("", UDim2.new(0, 15, 0, 154), page4)
+
+
+
+
+
+--		██████╗░██╗██████╗░░█████╗░██████╗░░█████╗░░██████╗		--
+--		██╔══██╗██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝		--
+--		██████╔╝██║██║░░██║██║░░██║██████╔╝███████║╚█████╗░		--
+--		██╔═══╝░██║██║░░██║██║░░██║██╔══██╗██╔══██║░╚═══██╗		--
+--		██║░░░░░██║██████╔╝╚█████╔╝██║░░██║██║░░██║██████╔╝		--		
+--		╚═╝░░░░░╚═╝╚═════╝░░╚════╝░╚═╝░░╚═╝╚═╝░░╚═╝╚═════╝░		--		
+
+-- Sorry tencelll :3 this my work :7
+
+
+
+
+
+
+-- --- КНОПКА АВТО-ФАРМА ПЕРЧАТКИ TYCOON ---
+local tycoonContainer = Instance.new("Frame")
+tycoonContainer.Name = "TycoonContainer"
+tycoonContainer.Size = UDim2.new(0, 280, 0, 40)
+tycoonContainer.Position = UDim2.new(0, 20, 0, 175) -- Размещаем ниже остальных кнопок
+tycoonContainer.BackgroundTransparency = 1
+tycoonContainer.Parent = scrollPage2
+
+local tycoonButton = Instance.new("TextButton")
+tycoonButton.Size = UDim2.new(0, 280, 0, 40)
+tycoonButton.BackgroundColor3 = Color3.fromRGB(240, 180, 0) -- Красивый золотой цвет
+tycoonButton.Text = "  Фарм перчатки Tycoon [ВЫКЛ]"
+tycoonButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+tycoonButton.Font = Enum.Font.GothamBold
+tycoonButton.TextSize = 14
+tycoonButton.TextXAlignment = Enum.TextXAlignment.Left
+tycoonButton.Parent = tycoonContainer
+
+local tycoonCorner = Instance.new("UICorner")
+tycoonCorner.CornerRadius = UDim.new(0, 6)
+tycoonCorner.Parent = tycoonButton
+
+-- Переключатель функции
+local tycoonFarmActive = false
+
+tycoonButton.MouseButton1Click:Connect(function()
+	tycoonFarmActive = not tycoonFarmActive
+	if tycoonFarmActive then
+		tycoonButton.Text = "  Фарм перчатки Tycoon [ВКЛ]"
+		tycoonButton.BackgroundColor3 = Color3.fromRGB(255, 210, 0)
+	else
+		tycoonButton.Text = "  Фарм перчатки Tycoon [ВЫКЛ]"
+		tycoonButton.BackgroundColor3 = Color3.fromRGB(240, 180, 0)
+	end
+end)
+
+
+
+-- =============================================================================
+-- КНОПКА ВКЛЮЧЕНИЯ/ВЫКЛЮЧЕНИЯ КИЛЛ АУРЫ (ВЫРАВНЕНА ПОД ESP)
+-- =============================================================================
+
+-- Таблица настроек для ауры (если её еще нет выше в скрипте)
+local auraSettings = {
+	enabled = false,    -- Изначально аура выключена, пока не нажмешь кнопку
+	distance = 15,      -- Дистанция удара
+}
+
+-- Создаем контейнер для кнопки ауры, чтобы она стояла ровно под ESP
+local auraContainer = Instance.new("Frame")
+auraContainer.Name = "AuraContainer"
+auraContainer.Size = UDim2.new(0, 280, 0, 40)
+auraContainer.Position = UDim2.new(0, 20, 0, 225) -- Позиция ниже контейнера ESP
+auraContainer.BackgroundTransparency = 1
+auraContainer.Parent = scrollPage2
+
+-- Сама кнопка Килл Ауры
+local auraButton = Instance.new("TextButton")
+auraButton.Name = "AuraButton"
+auraButton.Size = UDim2.new(0, 280, 0, 40)
+auraButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+auraButton.Text = "  Килл Аура (Auto Slap) [ВЫКЛ]"
+auraButton.TextColor3 = Color3.fromRGB(200, 50, 50) -- Изначально красный текст
+auraButton.Font = Enum.Font.GothamBold
+auraButton.TextSize = 14
+auraButton.TextXAlignment = Enum.TextXAlignment.Left
+auraButton.Parent = auraContainer
+
+local auraCorner = Instance.new("UICorner")
+auraCorner.CornerRadius = UDim.new(0, 6)
+auraCorner.Parent = auraButton
+
+-- Логика переключения при клике
+auraButton.MouseButton1Click:Connect(function()
+	auraSettings.enabled = not auraSettings.enabled
+	
+	-- Меняем текст и цвет в зависимости от состояния
+	if auraSettings.enabled then
+		auraButton.Text = "  Килл Аура (Auto Slap) [ВКЛ]"
+		auraButton.TextColor3 = Color3.fromRGB(50, 200, 50) -- Зеленый цвет при включении
+	else
+		auraButton.Text = "  Килл Аура (Auto Slap) [ВЫКЛ]"
+		auraButton.TextColor3 = Color3.fromRGB(200, 50, 50) -- Красный цвет при выключении
+	end
+end)
+
+
+-- =============================================================================
+-- 4. ИНТЕРФЕЙС КНОПКИ ESP И ДРОПДАУНА
+-- =============================================================================
+
+
+-- Глобальная таблица флагов для состояний функций
+local flags = { mainEsp = false, gloves = false, oneshot = false, knockback = false }
+
+-- Контейнер для списка кнопок ESP
+local espContainer = Instance.new("Frame")
+espContainer.Name = "EspContainer"
+espContainer.Size = UDim2.new(0, 280, 0, 40)
+espContainer.Position = UDim2.new(0, 20, 0, 50)
+espContainer.BackgroundTransparency = 1
+espContainer.Parent = scrollPage2
+
+-- Главная кнопка ESP
+local espMainButton = Instance.new("TextButton")
+espMainButton.Size = UDim2.new(0, 280, 0, 40)
+espMainButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+espMainButton.Text = "  ESP Функции [ВЫКЛ]"
+espMainButton.TextColor3 = Color3.fromRGB(200, 50, 50)
+espMainButton.Font = Enum.Font.GothamBold
+espMainButton.TextSize = 14
+espMainButton.TextXAlignment = Enum.TextXAlignment.Left
+espMainButton.Parent = espContainer
+
+local espMainCorner = Instance.new("UICorner")
+espMainCorner.CornerRadius = UDim.new(0, 6)
+espMainCorner.Parent = espMainButton
+
+local arrowLabel = Instance.new("TextLabel")
+arrowLabel.Size = UDim2.new(0, 30, 0, 40)
+arrowLabel.Position = UDim2.new(1, -35, 0, 0)
+arrowLabel.Text = "▼"
+arrowLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+arrowLabel.Font = Enum.Font.GothamBold
+arrowLabel.TextSize = 14
+arrowLabel.BackgroundTransparency = 1
+arrowLabel.Parent = espMainButton
+
+local dropdownFrame = Instance.new("Frame")
+dropdownFrame.Size = UDim2.new(1, 0, 0, 115)
+dropdownFrame.Position = UDim2.new(0, 0, 0, 45)
+dropdownFrame.BackgroundTransparency = 1
+dropdownFrame.Visible = false
+dropdownFrame.Parent = espContainer
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 5)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = dropdownFrame
+
+-- Конструктор создания кастомных переключателей (тогглов)
+local function createSubButton(text, layoutOrder)
+	local subBtn = Instance.new("TextButton")
+
+	subBtn.Size = UDim2.new(1, 0, 0, 35)
+	subBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+	subBtn.Text = text .. " [ВЫКЛ]"
+	subBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
+	subBtn.Font = Enum.Font.Gotham
+	subBtn.TextSize = 13
+	subBtn.LayoutOrder = layoutOrder
+	subBtn.Parent = dropdownFrame
+
+	local subCorner = Instance.new("UICorner")
+	subCorner.CornerRadius = UDim.new(0, 5)
+	subCorner.Parent = subBtn
+	return subBtn
+end
+
+local btnGloves = createSubButton("Отображение перчаток", 1)
+local btnOneShot = createSubButton("Проверка на Ваншот", 2)
+local btnKnockback = createSubButton("Сила откидывания", 3)
+
+local isOpen = false
+espMainButton.MouseButton1Click:Connect(function()
+	flags.mainEsp = not flags.mainEsp
+	isOpen = not isOpen
+	espMainButton.Text = "  ESP Функции " .. (flags.mainEsp and "[ВКЛ]" or "[ВЫКЛ]")
+	espMainButton.TextColor3 = flags.mainEsp and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+	
+	if isOpen then
+		arrowLabel.Text = "▲"; dropdownFrame.Visible = true; espContainer.Size = UDim2.new(0, 280, 0, 165)
+	else
+		arrowLabel.Text = "▼"; dropdownFrame.Visible = false; espContainer.Size = UDim2.new(0, 280, 0, 40)
+	end
+end)
+
+btnGloves.MouseButton1Click:Connect(function()
+	flags.gloves = not flags.gloves
+	btnGloves.Text = "Отображение перчаток " .. (flags.gloves and "[ВКЛ]" or "[ВЫКЛ]")
+	btnGloves.TextColor3 = flags.gloves and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+btnOneShot.MouseButton1Click:Connect(function()
+	flags.oneshot = not flags.oneshot
+	btnOneShot.Text = "Проверка на Ваншот " .. (flags.oneshot and "[ВКЛ]" or "[ВЫКЛ]")
+	btnOneShot.TextColor3 = flags.oneshot and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+btnKnockback.MouseButton1Click:Connect(function()
+	flags.knockback = not flags.knockback
+	btnKnockback.Text = "Сила откидывания " .. (flags.knockback and "[ВКЛ]" or "[ВЫКЛ]")
+	btnKnockback.TextColor3 = flags.knockback and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+-- =============================================================================
+-- 5. АБСОЛЮТНО СТАБИЛЬНЫЙ FORCE-ДВИЖОК ESP (ДЛЯ SLAP BATTLES)
+-- =============================================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- База данных популярных перчаток Slap Battles
+local gloveData = {
+	["Overkill"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Error"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["God's Hand"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["The Flex"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Custom"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Default"] = {oneShot = "Нет 🗿", power = "30"},
+	["Extended"] = {oneShot = "Нет 🗿", power = "35"}
+}
+
+-- Стабильный поиск перчаток без падений скрипта
+local function getGlove(player)
+	local char = player.Character
+	if char then
+		local tool = char:FindFirstChildOfClass("Tool")
+		if tool then return tool.Name end
+	end
+	local ls = player:FindFirstChild("leaderstats")
+	if ls and ls:FindFirstChild("Glove") then return tostring(ls.Glove.Value) end
+	return "None"
+end
+
+-- Точечная и безопасная очистка объектов ESP при выключении функции
+local function clearESP(char)
+	if char and char:FindFirstChild("HubHighlight") then char.HubHighlight:Destroy() end
+	if char and char:FindFirstChild("Head") and char.Head:FindFirstChild("HubBillboard") then
+		char.Head.HubBillboard:Destroy()
 	end
 end
 
--- Назначаем действия кнопкам
-btnOpenPage1.MouseButton1Click:Connect(function()
-	showPage(page1) -- Включает первое GUI
+-- Полностью изолированный цикл слежки (Force-сканирование арены)
+task.spawn(function()
+	while task.wait(0.4) do
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+				local char = p.Character
+				local head = char.Head
+
+				if flags.mainEsp then
+					-- 1. Подсветка силуэта (Highlight) — Работает всегда, пока горит главная кнопка ESP
+					local hl = char:FindFirstChild("HubHighlight")
+					if not hl then
+						hl = Instance.new("Highlight")
+						hl.Name = "HubHighlight"
+						hl.FillColor = Color3.fromRGB(255, 50, 50)
+						hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+						hl.FillTransparency = 0.5
+						hl.Parent = char
+					end
+					hl.Enabled = true
+
+					-- 2. Логика Текста — Отрендерится, только если активен хоть один флаг информации
+					local isAnyTextActive = flags.gloves or flags.oneshot or flags.knockback
+					local bgui = head:FindFirstChild("HubBillboard")
+
+					if isAnyTextActive then
+						local tLabel
+						if not bgui then
+							bgui = Instance.new("BillboardGui")
+							bgui.Name = "HubBillboard"
+							bgui.AlwaysOnTop = true
+							bgui.Size = UDim2.new(0, 200, 0, 70)
+							bgui.ExtentsOffset = Vector3.new(0, 3.5, 0)
+							
+							tLabel = Instance.new("TextLabel")
+							tLabel.Name = "HubText"
+							tLabel.Size = UDim2.new(1, 0, 1, 0)
+							tLabel.BackgroundTransparency = 1
+							tLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+							tLabel.TextStrokeTransparency = 0 -- Обводка букв
+							tLabel.Font = Enum.Font.GothamBold
+							tLabel.TextSize = 12
+							tLabel.Parent = bgui
+							bgui.Parent = head
+						else
+							tLabel = bgui:FindFirstChild("HubText")
+						end
+
+						if tLabel then
+							local currentGlove = getGlove(p)
+							local info = gloveData[currentGlove] or {oneShot = "Нет ❌", power = "Обычная"}
+
+							local text = "[" .. p.DisplayName .. "]"
+							if flags.gloves then text = text .. "\n🧤 Перчатка: " .. currentGlove end
+							if flags.oneshot then text = text .. "\n💀 Ваншот: " .. info.oneShot end
+							if flags.knockback then text = text .. "\n💥 Сила: " .. info.power end
+							
+							tLabel.Text = text
+							bgui.Enabled = true
+						end
+					else
+						-- Если текстовые функции отжаты, стираем BillboardGui, оставляя чистый Highlight
+						if bgui then bgui:Destroy() end
+					end
+				else
+					-- Если полностью вырубили ESP кнопкой
+					clearESP(char)
+				end
+			end
+		end
+	end
 end)
 
-btnOpenPage2.MouseButton1Click:Connect(function()
-	showPage(page2) -- Включает второе GUI с прибамбасами
+
+-- =============================================================================
+-- АВТОМАТИЧЕСКИЙ УДАР (AUTO SLAP / KILL AURA) ДЛЯ SLAP BATTLES
+-- =============================================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+-- Настройки ауры ударов
+local auraSettings = {
+	enabled = true,     -- Поставь false, если хочешь изначально выключить функцию
+	distance = 15,      -- Радиус удара в студиях (15 — оптимально для обычных перчаток)
+}
+
+-- Функция для безопасного поиска и активации перчатки в руке
+local function slapTarget(targetChar)
+	local char = LocalPlayer.Character
+	if not char then return end
+
+	-- Ищем перчатку, которая сейчас экипирована (взята в руки)
+	local glove = char:FindFirstChildOfClass("Tool")
+	if glove then
+		-- Slap Battles использует стандартный метод .Activate() для удара рукой
+		glove:Activate()
+	end
+end
+
+-- Изолированный быстрый поток для отслеживания дистанции до врагов
+task.spawn(function()
+	-- Используем Heartbeat для моментальной реакции (каждый кадр игры)
+	RunService.Heartbeat:Connect(function()
+		if not auraSettings.enabled then return end
+
+		local myChar = LocalPlayer.Character
+		local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+		if not myRoot then return end
+
+		-- Перебираем всех игроков на сервере
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character then
+				local enemyChar = p.Character
+				local enemyRoot = enemyChar:FindFirstChild("HumanoidRootPart")
+				local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
+
+				-- Проверяем: жив ли враг, есть ли у него хитбокс и не находится ли он в лобби
+				if enemyRoot and enemyHumanoid and enemyHumanoid.Health > 0 then
+					-- Считаем точное расстояние между тобой и целью
+					local dist = (myRoot.Position - enemyRoot.Position).Magnitude
+
+					if dist <= auraSettings.distance then
+						-- Если игрок подошел близко — бьем его перчаткой
+						slapTarget(enemyChar)
+					end
+				end
+			end
+		end
+	end)
+end)
+
+-- --- [ПОТОК 6: АВТОМАТИЧЕСКИЙ УДЕРЖАТЕЛЬ НА ТАРЕЛКЕ ТАЙКУНА] ---
+local BadgeService = game:GetService("BadgeService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local tycoonBadgeId = 2129212001 -- ID оригинального бейджа Plate master в Slap Battles
+
+task.spawn(function()
+	-- Привязываем выполнение к RenderStepped (каждый кадр рендеринга), чтобы ТП был бесшовным
+	RunService.RenderStepped:Connect(function()
+		if not tycoonFarmActive then return end
+		
+		local myChar = LocalPlayer.Character
+		local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+		local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
+		
+		if myRoot and myHumanoid then
+			-- Проверка: получили ли мы уже бейдж? Если да — выключаем скрипт автоматически
+			local hasBadge = false
+			pcall(function()
+				hasBadge = BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, tycoonBadgeId)
+			end)
+			
+			if hasBadge then
+				tycoonFarmActive = false
+				tycoonButton.Text = "  Tycoon ПОЛУЧЕН! ✅"
+				tycoonButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+				return
+			end
+			
+			-- Логика авто-входа на арену (если мы умерли и возродились в лобби)
+			if myRoot.Position.Y < -50 then 
+				-- Ищем красный портал в лобби (обычно называется "ArenaPortal" или "Portal")
+				local portal = Workspace:FindFirstChild("ArenaPortal") or Workspace:FindFirstChild("Portal")
+				if portal and portal:IsA("BasePart") then
+					myRoot.CFrame = portal.CFrame
+				end
+				return
+			end
+			
+			-- ПОИСК ТАРЕЛКИ НА КАРТЕ SLAP BATTLES
+			-- В игре тарелка обычно лежит по пути Workspace.Arena.Plate или просто называется "Plate"
+			local plate = Workspace:FindFirstChild("Plate") or (Workspace:FindFirstChild("Arena") and Workspace.Arena:FindFirstChild("Plate"))
+			
+			if plate and plate:IsA("BasePart") then
+				-- Сбрасываем инерцию падения, чтобы персонаж не улетел от прыжка тарелки
+				myRoot.Velocity = Vector3.new(0, 0, 0)
+				
+				-- "Приклеиваем" игрока ровно по центру тарелки, приподняв на 3.5 студии вверх
+				-- Так как тарелка крутится, CFrame будет двигать тебя синхронно с ней каждую миллисекунду
+				myRoot.CFrame = plate.CFrame * CFrame.new(0, 3.5, 0)
+			end
+		end
+	end)
+end)
+
+
+
+-- --- [ПОТОК 5: ЛЕГЕНДАРНЫЙ ХИТБОКС-ФАРМ СЛАПОВ (БЕЗ ТЕЛЕПОРТОВ)] ---
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+task.spawn(function()
+	while task.wait(0.3) do -- Скорость ударов
+		if ultimateFarmActive then
+			local myChar = LocalPlayer.Character
+			local myGlove = myChar and myChar:FindFirstChildOfClass("Tool")
+			
+			-- Проверяем, взята ли перчатка в руки
+			if myGlove and myGlove:FindFirstChild("Glove") then
+				local glovePart = myGlove.Glove
+				
+				-- РАСШИРЯЕМ ХИТБОКС ТВОЕЙ ПЕРЧАТКИ ДО КИСЛОТНЫХ МАСШТАБОВ
+				-- Перчатка физически раздувается до размеров 500х500х500 студий (накрывает всю арену)
+				glovePart.Size = Vector3.new(500, 500, 500)
+				glovePart.CanCollide = false
+				glovePart.Transparency = 0.9 -- Делаем её почти невидимой, чтобы не мешала обзору
+				
+				-- Перебираем игроков на сервере, кто попал в зону нашей гигантской перчатки
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+						local enemyChar = p.Character
+						local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
+						local enemyRoot = enemyChar.HumanoidRootPart
+						
+						-- Наносим удары только живым на арене
+						if enemyHumanoid and enemyHumanoid.Health > 0 and enemyRoot.Position.Y > -50 then
+							
+							-- Имитируем легитный взмах руки (срабатывает встроенный в Roblox эвент .Touched)
+							myGlove:Activate()
+							
+							-- Создаем микро-смещение детали перчатки, чтобы игра зафиксировала физическое касание (TouchInterest)
+							glovePart.Position = enemyRoot.Position
+							
+							task.wait(0.02)
+						end
+					end
+				end
+			end
+		else
+			-- ЕСЛИ ВЫКЛЮЧИЛИ ФАРМ — ВОЗВРАЩАЕМ ПЕРЧАТКЕ ОБЫЧНЫЙ РАЗМЕР
+			local myChar = LocalPlayer.Character
+			local myGlove = myChar and myChar:FindFirstChildOfClass("Tool")
+			if myGlove and myGlove:FindFirstChild("Glove") then
+				myGlove.Glove.Size = Vector3.new(2.5, 2.5, 2.5) -- Дефолтный размер перчатки в игре
+				myGlove.Glove.Transparency = 0
+			end
+		end
+	end
 end)
