@@ -1,1 +1,1441 @@
 -- Create By P3D1k and Chat GPT
+
+
+
+
+--		██████╗░██╗██████╗░░█████╗░██████╗░░█████╗░░██████╗		--
+--		██╔══██╗██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔════╝		--
+--		██████╔╝██║██║░░██║██║░░██║██████╔╝███████║╚█████╗░		--
+--		██╔═══╝░██║██║░░██║██║░░██║██╔══██╗██╔══██║░╚═══██╗		--
+--		██║░░░░░██║██████╔╝╚█████╔╝██║░░██║██║░░██║██████╔╝		--		
+--		╚═╝░░░░░╚═╝╚═════╝░░╚════╝░╚═╝░░╚═╝╚═╝░░╚═╝╚═════╝░		--		
+
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local BadgeService = game:GetService("BadgeService")
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local flags = {
+	mainEsp = false,
+	gloves = true,
+	oneshot = true,
+	knockback = true
+}
+
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Цвета из референса
+local BG_DARK = Color3.fromRGB(18, 18, 24)       -- Левая панель
+local BG_LIGHT = Color3.fromRGB(25, 25, 32)      -- Правая панель
+local BTN_DEFAULT = Color3.fromRGB(35, 35, 45)   -- Цвет выключенной кнопки
+local WHITE_TEXT = Color3.fromRGB(240, 240, 240) -- Текст
+
+-- Контейнер интерфейса
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SlapArenaAdminPanel"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Главное окно
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainWindow"
+mainFrame.Size = UDim2.new(0, 520, 0, 480)
+mainFrame.Position = UDim2.new(0.5, -260, 0.5, -240)
+mainFrame.BackgroundColor3 = BG_LIGHT
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+-- Левый сайдбар (темная зона)
+local sidebar = Instance.new("Frame")
+sidebar.Name = "Sidebar"
+sidebar.Size = UDim2.new(0, 150, 1, 0)
+sidebar.BackgroundColor3 = BG_DARK
+sidebar.BorderSizePixel = 0
+sidebar.Parent = mainFrame
+
+local sideCorner = Instance.new("UICorner")
+sideCorner.CornerRadius = UDim.new(0, 10)
+sideCorner.Parent = sidebar
+
+-- Фикс правых углов сайдбара
+local fixFrame = Instance.new("Frame")
+fixFrame.Size = UDim2.new(0, 20, 1, 0)
+fixFrame.Position = UDim2.new(1, -20, 0, 0)
+fixFrame.BackgroundColor3 = BG_DARK
+fixFrame.BorderSizePixel = 0
+fixFrame.Parent = sidebar
+
+-- Кнопка сворачивания (минус)
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 25, 0, 25)
+minimizeButton.Position = UDim2.new(1, -35, 0, 10)
+minimizeButton.BackgroundTransparency = 1
+minimizeButton.Text = "—"
+minimizeButton.TextColor3 = Color3.fromRGB(150, 150, 160)
+minimizeButton.TextSize = 16
+minimizeButton.ZIndex = 5
+minimizeButton.Parent = mainFrame
+
+-- Кнопка "Открыть" на экране
+local openButton = Instance.new("TextButton")
+openButton.Size = UDim2.new(0, 90, 0, 40)
+openButton.Position = UDim2.new(0, 20, 0, 20)
+openButton.BackgroundColor3 = BG_DARK
+openButton.Text = "Открыть"
+openButton.TextColor3 = WHITE_TEXT
+openButton.Font = Enum.Font.GothamMedium
+openButton.TextSize = 14
+openButton.Visible = false
+openButton.Parent = screenGui
+
+local openCorner = Instance.new("UICorner")
+openCorner.CornerRadius = UDim.new(0, 8)
+openCorner.Parent = openButton
+
+-- =============================================================================
+-- ЭФФЕКТ ЗАГРУЗКИ (СЕРЫЙ ЭКРАН + ЛУННАЯ АНИМАЦИЯ) — СРАБАТЫВАЕТ ПРИ ЗАПУСКЕ
+-- =============================================================================
+
+-- Создаем серый полноэкранный фон
+local loadingOverlay = Instance.new("Frame")
+loadingOverlay.Name = "LoadingOverlay"
+loadingOverlay.Size = UDim2.new(1, 0, 1, 0)
+loadingOverlay.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+loadingOverlay.BackgroundTransparency = 1 -- Изначально прозрачный
+loadingOverlay.ZIndex = 99999 -- Поверх абсолютно всего
+loadingOverlay.Parent = screenGui
+
+-- Текст для крутящихся лунных смайликов
+local moonLabel = Instance.new("TextLabel")
+moonLabel.Name = "MoonAnimation"
+moonLabel.Size = UDim2.new(0, 200, 0, 100)
+moonLabel.Position = UDim2.new(0.5, -100, 0.5, -50)
+moonLabel.BackgroundTransparency = 1
+moonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+moonLabel.Font = Enum.Font.GothamBold
+moonLabel.TextSize = 60
+moonLabel.Text = "🌑"
+moonLabel.TextTransparency = 1
+moonLabel.Parent = loadingOverlay
+
+-- Анимация появления серого экрана
+TweenService:Create(loadingOverlay, TweenInfo.new(0.5), {BackgroundTransparency = 0.2}):Play()
+TweenService:Create(moonLabel, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+
+-- Цикл смены лунных смайликов
+local moons = {"🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"}
+task.spawn(function()
+	local duration = 4 -- Длительность загрузки в секундах
+	local step = 0.15
+	local elapsed = 0
+	local index = 1
+	
+	while elapsed < duration do
+		moonLabel.Text = moons[index]
+		index = index % #moons + 1
+		task.wait(step)
+		elapsed = elapsed + step
+	end
+	
+	-- Плавно убираем серый экран после окончания времени
+	TweenService:Create(loadingOverlay, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+	local fadeMoon = TweenService:Create(moonLabel, TweenInfo.new(0.8), {TextTransparency = 1})
+	fadeMoon:Play()
+	
+	-- В ЭТОТ ЖЕ МОМЕНТ КРАСИВО ПРОЯВЛЯЕМ НАШУ АДМИН-ПАНЕЛЬ
+	mainFrame.Size = UDim2.new(0, 0, 0, 0)
+	backgroundFrame.Size = UDim2.new(0, 0, 0, 0)
+	
+	mainFrame.Visible = true
+	backgroundFrame.Visible = true
+	
+	local openInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+	TweenService:Create(mainFrame, openInfo, {Size = UDim2.new(0, 520, 0, 480)}):Play()
+	TweenService:Create(backgroundFrame, openInfo, {Size = UDim2.new(0, 520, 0, 480)}):Play()
+	
+	fadeMoon.Completed:Connect(function()
+		loadingOverlay:Destroy()
+	end)
+end)
+
+
+----------------------------------------------------
+-- СИСТЕМА СТРАНИЦ КОНТЕНТА
+----------------------------------------------------
+local activeButtons = {}
+local currentActiveButton = nil
+local pages = {} 
+
+local function createCategory(name, positionY)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -20, 0, 38)
+	btn.Position = UDim2.new(0, 10, 0, positionY)
+	btn.BackgroundColor3 = BTN_DEFAULT
+	btn.BorderSizePixel = 0
+	btn.Text = name
+	btn.TextColor3 = WHITE_TEXT
+	btn.Font = Enum.Font.GothamMedium
+	btn.TextSize = 13
+	btn.ZIndex = 2
+	btn.Parent = sidebar
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 6)
+	btnCorner.Parent = btn
+	
+	local pageContainer = Instance.new("ScrollingFrame")
+	pageContainer.Name = name .. "Page"
+	pageContainer.Size = UDim2.new(1, -170, 1, -30)
+	pageContainer.Position = UDim2.new(0, 160, 0, 15)
+	pageContainer.BackgroundTransparency = 1
+	pageContainer.BorderSizePixel = 0
+	pageContainer.CanvasSize = UDim2.new(0, 0, 0, 500)
+	pageContainer.ScrollBarThickness = 4
+	pageContainer.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+	pageContainer.Visible = false
+	pageContainer.Parent = mainFrame
+	
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.PaddingLeft = UDim.new(0, 10)
+	padding.Parent = pageContainer
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 8)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = pageContainer
+	
+	pages[name] = pageContainer
+	table.insert(activeButtons, btn)
+
+	btn.MouseButton1Click:Connect(function()
+		currentActiveButton = btn
+		for _, otherBtn in ipairs(activeButtons) do
+			if otherBtn ~= btn then otherBtn.BackgroundColor3 = BTN_DEFAULT end
+		end
+		for _, page in pairs(pages) do page.Visible = false end
+		pageContainer.Visible = true
+	end)
+
+	return btn
+end
+
+-- Вкладка 1 (Lobby)
+local lobbyBtn = createCategory("Lobby", 15)
+
+-- Вкладка 2 (Other function)
+local otherBtn = createCategory("Other function", 60)
+
+-- Вкладка 3 (Combat)
+local combatBtn = createCategory("Combat", 105)
+
+-- Вкладка 4 (Movement)
+local movementBtn = createCategory("Movement", 150)
+
+-- Вкладка 5 (Visuals)
+local visualsBtn = createCategory("Visuals", 195)
+
+-- Вкладка 6 (World)
+local worldBtn = createCategory("World", 240)
+
+-- Вкладка 7 (Teleport)
+local teleportBtn = createCategory("Teleport", 285)
+
+-- Вкладка 8 (Players)
+local playersBtn = createCategory("Players", 330)
+
+-- Вкладка 9 (Settings)
+local settingsBtn = createCategory("Settings", 375)
+
+-- Вкладка 10 (Credits)
+local creditsBtn = createCategory("Credits", 420)
+
+currentActiveButton = lobbyBtn
+pages["Lobby"].Visible = true
+
+----------------------------------------------------
+-- НАПОЛНЕНИЕ ВКЛАДОК ФУНКЦИОНАЛОМ
+----------------------------------------------------
+-- =============================================================================
+-- СКОРОСТЬ И ПОЛЕТ С ПОЛЗУНКАМИ ОТ 0 ДО 100 (ВКЛАДКА MOVEMENT)
+-- =============================================================================
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local flyActive = false
+local flyVelocity = nil
+local flyGyro = nil
+
+-- Значения ползунков по умолчанию
+local currentSpeedValue = 16  -- Дефолтная скорость Roblox
+local currentFlyValue = 50    -- Дефолтная скорость полета
+
+-- Функция создания ползунка (Slider)
+local function createSlider(name, textPrefix, defaultValue, parentPage, callback)
+	local sliderFrame = Instance.new("Frame")
+	sliderFrame.Name = name .. "Frame"
+	sliderFrame.Size = UDim2.new(1, -20, 0, 55)
+	sliderFrame.BackgroundTransparency = 1
+	sliderFrame.Parent = parentPage
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 20)
+	label.BackgroundTransparency = 1
+	label.Text = "  " .. textPrefix .. ": " .. tostring(defaultValue)
+	label.TextColor3 = Color3.fromRGB(240, 240, 240)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 13
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = sliderFrame
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, -10, 0, 6)
+	track.Position = UDim2.new(0, 5, 0, 30)
+	track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	track.BorderSizePixel = 0
+	track.Parent = sliderFrame
+	
+	local trackCorner = Instance.new("UICorner")
+	trackCorner.CornerRadius = UDim.new(0, 3)
+	trackCorner.Parent = track
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new(defaultValue / 100, 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 3)
+	fillCorner.Parent = fill
+
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(0, 16, 0, 16)
+	button.Position = UDim2.new(defaultValue / 100, -8, 0.5, -8)
+	button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	button.Text = ""
+	button.Parent = track
+
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(1, 0)
+	btnCorner.Parent = button
+
+	-- Логика перетаскивания ползунка
+	local dragging = false
+
+	button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local trackRawWidth = track.AbsoluteSize.X
+			local mouseX = input.Position.X - track.AbsolutePosition.X
+			local percentage = math.clamp(mouseX / trackRawWidth, 0, 1)
+			
+			local finalValue = math.round(percentage * 100)
+			
+			button.Position = UDim2.new(percentage, -8, 0.5, -8)
+			fill.Size = UDim2.new(percentage, 0, 1, 0)
+			label.Text = "  " .. textPrefix .. ": " .. tostring(finalValue)
+			
+			callback(finalValue)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+end
+
+----------------------------------------
+-- ИНТЕГРАЦИЯ ПОЛЗУНКА СКОРОСТИ
+----------------------------------------
+createSlider("SpeedSlider", "⚡ Скорость Бега", currentSpeedValue, pages["Movement"], function(value)
+	currentSpeedValue = value
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then 
+		hum.WalkSpeed = currentSpeedValue 
+	end
+end)
+
+-- Поддержание выкрученной скорости при респавне
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid", 5)
+	if hum then 
+		hum.WalkSpeed = currentSpeedValue 
+	end
+end)
+
+-- =============================================================================
+-- ПЕРЕНЕСЕННЫЙ ПОЛЕТ (FLY GUI V3) С ПОЛЗУНКОМ СКОРОСТИ — ВКЛАДКА MOVEMENT
+-- =============================================================================
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+local speaker = Players.LocalPlayer
+local nowe = false
+local tpwalking = false
+local flySpeedValue = 1 -- Соответствует вашей переменной speeds
+
+-- Главная кнопка полета в вашей панели
+local flyButton = Instance.new("TextButton")
+flyButton.Name = "AdaptedFlyButton"
+flyButton.Size = UDim2.new(1, -20, 0, 40)
+flyButton.BackgroundColor3 = Color3.fromRGB(70, 50, 150)
+flyButton.Text = "  ✈️ Включить Полет [ВЫКЛ]"
+flyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+flyButton.Font = Enum.Font.GothamBold
+flyButton.TextSize = 14
+flyButton.TextXAlignment = Enum.TextXAlignment.Left
+flyButton.Parent = pages["Movement"]
+
+local flyCorner = Instance.new("UICorner")
+flyCorner.CornerRadius = UDim.new(0, 6)
+flyCorner.Parent = flyButton
+
+-- Функция переключения состояний гуманоида (взята из вашего скрипта)
+local function setHumanoidStates(state)
+	local char = speaker.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Flying, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Landed, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Physics, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Running, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Seated, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, state)
+		hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, state)
+	end
+end
+
+-- Логика кнопки Полета
+flyButton.MouseButton1Click:Connect(function()
+	if not speaker.Character or not speaker.Character:FindFirstChildOfClass("Humanoid") then return end
+	local hum = speaker.Character:FindFirstChildOfClass("Humanoid")
+	local animate = speaker.Character:FindFirstChild("Animate")
+
+	if nowe then
+		-- ВЫКЛЮЧЕНИЕ ПОЛЕТА
+		nowe = false
+		tpwalking = false
+		flyButton.Text = "  ✈️ Включить Полет [ВЫКЛ]"
+		flyButton.BackgroundColor3 = Color3.fromRGB(70, 50, 150)
+
+		setHumanoidStates(true)
+		hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+		
+		if animate then animate.Disabled = false end
+	else
+		-- ВКЛЮЧЕНИЕ ПОЛЕТА
+		nowe = true
+		tpwalking = true
+		flyButton.Text = "  ✈️ Включить Полет [ВКЛ]"
+		flyButton.BackgroundColor3 = Color3.fromRGB(110, 80, 220)
+
+		if animate then animate.Disabled = true end
+		
+		for _, v in next, hum:GetPlayingAnimationTracks() do
+			v:AdjustSpeed(0)
+		end
+
+		setHumanoidStates(false)
+		hum:ChangeState(Enum.HumanoidStateType.Swimming)
+
+		-- Перенесенный цикл движения TranslateBy из вашего скрипта
+		task.spawn(function()
+			local hb = RunService.Heartbeat
+			while tpwalking and hb:Wait() do
+				local chr = speaker.Character
+				local currentHum = chr and chr:FindFirstChildOfClass("Humanoid")
+				if currentHum and currentHum.MoveDirection.Magnitude > 0 then
+					-- Умножаем вектор движения на выбранную в ползунке скорость
+					for i = 1, flySpeedValue do
+						chr:TranslateBy(currentHum.MoveDirection)
+					end
+				end
+			end
+		end)
+	end
+end)
+
+----------------------------------------
+-- СОЗДАНИЕ СЛАЙДЕРА СКОРОСТИ (ОТ 1 ДО 100)
+----------------------------------------
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Name = "FlySpeedSliderFrame"
+sliderFrame.Size = UDim2.new(1, -20, 0, 55)
+sliderFrame.BackgroundTransparency = 1
+sliderFrame.Parent = pages["Movement"]
+
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(1, 0, 0, 20)
+label.BackgroundTransparency = 1
+label.Text = "  ✈️ Множитель Скорости: 1"
+label.TextColor3 = Color3.fromRGB(240, 240, 240)
+label.Font = Enum.Font.GothamBold
+label.TextSize = 13
+label.TextXAlignment = Enum.TextXAlignment.Left
+label.Parent = sliderFrame
+
+local track = Instance.new("Frame")
+track.Size = UDim2.new(1, -10, 0, 6)
+track.Position = UDim2.new(0, 5, 0, 30)
+track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+track.BorderSizePixel = 0
+track.Parent = sliderFrame
+
+local trackCorner = Instance.new("UICorner")
+trackCorner.CornerRadius = UDim.new(0, 3)
+trackCorner.Parent = track
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(1 / 100, 0, 1, 0) -- Стартует с 1%
+fill.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+fill.BorderSizePixel = 0
+fill.Parent = track
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(0, 3)
+fillCorner.Parent = fill
+
+local sliderBtn = Instance.new("TextButton")
+sliderBtn.Size = UDim2.new(0, 16, 0, 16)
+sliderBtn.Position = UDim2.new(1 / 100, -8, 0.5, -8)
+sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+sliderBtn.Text = ""
+sliderBtn.Parent = track
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(1, 0)
+btnCorner.Parent = sliderBtn
+
+local isDraggingSlider = false
+
+sliderBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingSlider = true
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if isDraggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local trackWidth = track.AbsoluteSize.X
+		local mouseX = input.Position.X - track.AbsolutePosition.X
+		local percentage = math.clamp(mouseX / trackWidth, 0, 1)
+		
+		-- Значение от 1 до 100, чтобы не ставить 0 (иначе полет замрет)
+		local finalValue = math.clamp(math.round(percentage * 100), 1, 100) 
+		local actualPercentage = finalValue / 100
+		
+		sliderBtn.Position = UDim2.new(actualPercentage, -8, 0.5, -8)
+		fill.Size = UDim2.new(actualPercentage, 0, 1, 0)
+		label.Text = "  ✈️ Множитель Скорости: " .. tostring(finalValue)
+		
+		flySpeedValue = finalValue -- Перезаписываем множитель для TranslateBy
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingSlider = false
+	end
+end)
+
+-- =============================================================================
+-- БЛОК ТЕКСТА С АВТОРСТВОМ (ВКЛАДКА CREDITS)
+-- =============================================================================
+
+local creditsText = Instance.new("TextLabel")
+creditsText.Name = "CreditsInformationLabel"
+creditsText.Size = UDim2.new(1, -20, 1, -20) -- Заполняет всё доступное пространство вкладки
+creditsText.BackgroundTransparency = 1
+-- Ваш кастомный текст с переносами строк (\n)
+creditsText.Text = "Привет! Я создатель этого чита.\n Меня зовут Дмитрий. 😎\n\nСпасибо, что используешь этот скрипт для Slap Arena!\n\nПанель создана специально для удобного администрирования и быстрого фарма.\nУдачи в шлепках! 🔥"
+creditsText.TextColor3 = Color3.fromRGB(220, 220, 230)
+creditsText.Font = Enum.Font.GothamMedium
+creditsText.TextSize = 14
+creditsText.TextWrapped = true -- Автоматический перенос длинных слов, чтобы текст не вылезал за границы
+creditsText.TextYAlignment = Enum.TextYAlignment.Top -- Выравнивание текста по верхней границе
+creditsText.TextXAlignment = Enum.TextXAlignment.Left -- Выравнивание по левому краю
+
+-- Привязываем строго к автоматическому списку страницы Credits
+creditsText.Parent = pages["Credits"] 
+
+
+-- Замените старый task.spawn авто-фарма Plank на этот вариант:
+task.spawn(function()
+	-- Флаг, чтобы способность Fort на высоте прожалась только ОДИН раз за цикл фарминга
+	local abilityUsedOnHeight = false 
+
+	game:GetService("RunService").Heartbeat:Connect(function()
+		if not plankButton or not plankButton.Parent then return end
+		if not plankFarmActive then return end
+
+		local player = game:GetService("Players").LocalPlayer
+		local char = player.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+
+		if char and root then
+			-- 1. Проверяем, держит ли игрок перчатку Fort
+			local currentTool = char:FindFirstChildOfClass("Tool")
+			
+			if not currentTool or currentTool.Name ~= "Fort" then
+				alertLabel.Visible = true
+				abilityUsedOnHeight = false -- Сбрасываем флаг, если игрок убрал перчатку
+				return 
+			else
+				alertLabel.Visible = false
+			end
+
+			-- 2. ЭТАП ВЫСОТЫ: Если перчатка Fort в руках, но способность еще не была прожата на высоте
+			if not abilityUsedOnHeight then
+				root.Velocity = Vector3.new(0, 0, 0)
+				-- Телепортируем игрока на безопасную огромную высоту (5000 студий вверх)
+				root.CFrame = CFrame.new(root.Position.X, 5000, root.Position.Z)
+				
+				task.wait(0.5) -- Короткая пауза, чтобы физика персонажа стабилизировалась на высоте
+				
+				-- Автоматически активируем (прожимаем способность) перчатки Fort
+				currentTool:Activate() 
+				abilityUsedOnHeight = true -- Запоминаем, что форт на высоте успешно построен
+				return
+			end
+
+			-- 3. Проверка получения бейджа
+			local hasBadge = false
+			pcall(function()
+				hasBadge = game:GetService("BadgeService"):UserHasBadgeAsync(player.UserId, plankBadgeId)
+			end)
+
+			if hasBadge then
+				plankFarmActive = false
+				alertLabel.Visible = false
+				plankButton.Text = "  Plank ПОЛУЧЕН! ✅"
+				plankButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+				return
+			end
+
+			-- 4. Телепорт вниз к появившемуся объекту crack'90
+			local targetObject = workspace:FindFirstChild("Plank") 
+				or workspace:FindFirstChild("Crack") 
+				or (workspace:FindFirstChild("Arena") and (workspace.Arena:FindFirstChild("Plank") or workspace.Arena:FindFirstChild("Crack")))
+
+			if targetObject and targetObject:IsA("BasePart") then
+				root.Velocity = Vector3.new(0, 0, 0)
+				root.CFrame = targetObject.CFrame * CFrame.new(0, 2, 0) 
+			end
+		end
+	end)
+end)
+
+
+-- =============================================================================
+-- ВОЗДУШНАЯ ПЛАТФОРМА ПОД НОГАМИ (ВКЛАДКА MOVEMENT)
+-- =============================================================================
+
+local airPlatformActive = false
+local runService = game:GetService("RunService")
+local players = game:GetService("Players")
+
+local platformButton = Instance.new("TextButton")
+platformButton.Name = "AirPlatformButton"
+platformButton.Size = UDim2.new(1, -20, 0, 40)
+platformButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200) -- Синий цвет для движения
+platformButton.Text = "  🛸 Платформа под ногами [ВЫКЛ]"
+platformButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+platformButton.Font = Enum.Font.GothamBold
+platformButton.TextSize = 14
+platformButton.TextXAlignment = Enum.TextXAlignment.Left
+platformButton.Parent = pages["Movement"] -- Привязываем к вкладке Movement
+
+local platformCorner = Instance.new("UICorner")
+platformCorner.CornerRadius = UDim.new(0, 6)
+platformCorner.Parent = platformButton
+
+-- Создаем саму деталь платформы (скрыта в репликации до активации)
+local airPart = Instance.new("Part")
+airPart.Name = "AdminAirPlatform"
+airPart.Size = Vector3.new(6, 0.5, 6) -- Оптимальный размер, чтобы не промахнуться
+airPart.Transparency = 0.4
+airPart.BrickColor = BrickColor.new("Cyan")
+airPart.Material = Enum.Material.Neon
+airPart.Anchored = true
+airPart.CanCollide = true -- На неё можно наступать!
+
+-- Переменная для фиксации высоты, на которой была включена платформа
+local fixedHeightY = 0
+
+platformButton.MouseButton1Click:Connect(function()
+	airPlatformActive = not airPlatformActive
+	
+	local char = players.LocalPlayer.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	
+	if airPlatformActive then
+		platformButton.Text = "  🛸 Платформа под ногами [ВКЛ]"
+		platformButton.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+		
+		if root then
+			-- Запоминаем текущую высоту игрока и опускаем платформу ровно под подошву (-3.2 студии)
+			fixedHeightY = root.Position.Y - 3.2
+			airPart.Position = Vector3.new(root.Position.X, fixedHeightY, root.Position.Z)
+			airPart.Parent = workspace
+		end
+	else
+		platformButton.Text = "  🛸 Платформа под ногами [ВЫКЛ]"
+		platformButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+		airPart.Parent = nil -- Прячем платформу, игрок снова падает
+	end
+end)
+
+-- Постоянный цикл, который удерживает высоту детали, но двигает её вслед за координатами X и Z игрока
+runService.RenderStepped:Connect(function()
+	if not platformButton or not platformButton.Parent then return end -- Защита от удаления меню
+	
+	if airPlatformActive and airPart.Parent == workspace then
+		local char = players.LocalPlayer.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		
+		if root then
+			-- Самое главное: Берем X и Z от игрока (двигается за ним), но Y оставляем строго зафиксированным!
+			airPart.Position = Vector3.new(root.Position.X, fixedHeightY, root.Position.Z)
+		end
+	end
+end)
+
+
+-- =============================================================================
+-- ЭФФЕКТ ПРИ ИСПОЛЬЗОВАНИИ СПОСОБНОСТИ ПЕРЧАТКИ (ВКЛАДКА VISUALS)
+-- =============================================================================
+
+local abilityEffectActive = false
+local uis = game:GetService("UserInputService")
+local tweenService = game:GetService("TweenService")
+
+local abilityButton = Instance.new("TextButton")
+abilityButton.Name = "AbilityEffectButton"
+abilityButton.Size = UDim2.new(1, -20, 0, 40)
+abilityButton.BackgroundColor3 = Color3.fromRGB(150, 80, 0) -- Насыщенный янтарный цвет
+abilityButton.Text = "  💥 Эффект Способностей [ВЫКЛ]"
+abilityButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+abilityButton.Font = Enum.Font.GothamBold
+abilityButton.TextSize = 14
+abilityButton.TextXAlignment = Enum.TextXAlignment.Left
+abilityButton.Parent = pages["Visuals"]
+
+local abilityCorner = Instance.new("UICorner")
+abilityCorner.CornerRadius = UDim.new(0, 6)
+abilityCorner.Parent = abilityButton
+
+-- Включение / Выключение эффекта кнопкой
+abilityButton.MouseButton1Click:Connect(function()
+	abilityEffectActive = not abilityEffectActive
+	if abilityEffectActive then
+		abilityButton.Text = "  💥 Эффект Способностей [ВКЛ]"
+		abilityButton.BackgroundColor3 = Color3.fromRGB(210, 110, 0)
+	else
+		abilityButton.Text = "  💥 Эффект Способностей [ВЫКЛ]"
+		abilityButton.BackgroundColor3 = Color3.fromRGB(150, 80, 0)
+	end
+end)
+
+-- Функция создания красивой ударной волны вокруг игрока
+local function spawnWaveEffect(rootPart)
+	local wave = Instance.new("Part")
+	wave.Size = Vector3.new(1, 0.2, 1)
+	wave.CFrame = rootPart.CFrame * CFrame.new(0, -2, 0) -- Спавним под ногами
+	wave.Anchored = true
+	wave.CanCollide = false
+	wave.Material = Enum.Material.Neon
+	wave.Color = Color3.fromRGB(255, 165, 0) -- Яркий оранжевый неоновый импульс
+	wave.Shape = Enum.PartType.Cylinder
+	wave.Orientation = Vector3.new(0, 0, 90) -- Поворачиваем боком, чтобы получить кольцо на земле
+	wave.Parent = workspace
+
+	-- Скругляем края цилиндра, превращая его в красивый диск
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Cylinder
+	mesh.Parent = wave
+
+	-- Анимация расширения и растворения волны
+	local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+	local tween = tweenService:Create(wave, tweenInfo, {
+		Size = Vector3.new(0.2, 35, 35), -- Цилиндр расширяется в стороны на 35 студий
+		Transparency = 1
+	})
+	
+	tween:Play()
+	tween.Completed:Connect(function()
+		wave:Destroy()
+	end)
+end
+
+-- Функция эпичной тряски камеры (Cinematic Shake)
+local function shakeCamera()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+	local originalSubjectPosition = camera.CameraSubject
+	
+	task.spawn(function()
+		for i = 1, 6 do
+			local offsetX = math.random(-50, 50) / 100
+			local offsetY = math.random(-50, 50) / 100
+			local offsetZ = math.random(-50, 50) / 100
+			camera.CFrame = camera.CFrame * CFrame.new(offsetX, offsetY, offsetZ)
+			task.wait(0.02)
+		end
+	end)
+end
+
+-- Отслеживаем прожатие способности на кнопку "E"
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end -- Игнорируем, если игрок пишет в чат
+	if not abilityEffectActive then return end
+
+	-- Если нажата клавиша "E" (активация способности перчатки)
+	if input.KeyCode == Enum.KeyCode.E then
+		local char = game:GetService("Players").LocalPlayer.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		
+		-- Проверяем, держит ли игрок перчатку в руках в этот момент
+		if char and char:FindFirstChildOfClass("Tool") and root then
+			spawnWaveEffect(root)
+			shakeCamera()
+		end
+	end
+end)
+
+
+
+-- =============================================================================
+-- КНОПКИ КРАСИВЫХ ВИЗУАЛОВ (ВКЛАДКА VISUALS)
+-- =============================================================================
+
+-- Настройки визуальных эффектов
+local visualSettings = {
+	gloveRgb = false,
+	motionBlur = false
+}
+
+----------------------------------------
+-- 1. КНОПКА: RGB СЛЕД ДЛЯ ПЕРЧАТКИ
+----------------------------------------
+local gloveRgbButton = Instance.new("TextButton")
+gloveRgbButton.Name = "GloveRgbButton"
+gloveRgbButton.Size = UDim2.new(1, -20, 0, 40)
+gloveRgbButton.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+gloveRgbButton.Text = "  🌈 RGB След Перчатки [ВЫКЛ]"
+gloveRgbButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+gloveRgbButton.Font = Enum.Font.GothamBold
+gloveRgbButton.TextSize = 14
+gloveRgbButton.TextXAlignment = Enum.TextXAlignment.Left
+gloveRgbButton.Parent = pages["Visuals"]
+
+local rgbCorner = Instance.new("UICorner")
+rgbCorner.CornerRadius = UDim.new(0, 6)
+rgbCorner.Parent = gloveRgbButton
+
+gloveRgbButton.MouseButton1Click:Connect(function()
+	visualSettings.gloveRgb = not visualSettings.gloveRgb
+	if visualSettings.gloveRgb then
+		gloveRgbButton.Text = "  🌈 RGB След Перчатки [ВКЛ]"
+		gloveRgbButton.BackgroundColor3 = Color3.fromRGB(0, 170, 220)
+	else
+		gloveRgbButton.Text = "  🌈 RGB След Перчатки [ВЫКЛ]"
+		gloveRgbButton.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+	end
+end)
+
+----------------------------------------
+-- 2. КНОПКА: ЭФФЕКТ РАЗМЫТИЯ (MOTION BLUR)
+----------------------------------------
+local blurEffect = game:GetService("Lighting"):FindFirstChild("AdminMotionBlur") or Instance.new("BlurEffect")
+blurEffect.Name = "AdminMotionBlur"
+blurEffect.Size = 0
+blurEffect.Parent = game:GetService("Lighting")
+
+local blurButton = Instance.new("TextButton")
+blurButton.Name = "BlurButton"
+blurButton.Size = UDim2.new(1, -20, 0, 40)
+blurButton.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+blurButton.Text = "  🎬 Динамическое Размытие [ВЫКЛ]"
+blurButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+blurButton.Font = Enum.Font.GothamBold
+blurButton.TextSize = 14
+blurButton.TextXAlignment = Enum.TextXAlignment.Left
+blurButton.Parent = pages["Visuals"]
+
+local blurCorner = Instance.new("UICorner")
+blurCorner.CornerRadius = UDim.new(0, 6)
+blurCorner.Parent = blurButton
+
+blurButton.MouseButton1Click:Connect(function()
+	visualSettings.motionBlur = not visualSettings.motionBlur
+	if visualSettings.motionBlur then
+		blurButton.Text = "  🎬 Динамическое Размытие [ВКЛ]"
+		blurButton.BackgroundColor3 = Color3.fromRGB(120, 120, 150)
+	else
+		blurButton.Text = "  🎬 Динамическое Размытие [ВЫКЛ]"
+		blurButton.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+		blurEffect.Size = 0
+	end
+end)
+
+----------------------------------------
+-- РАБОЧИЙ ПОТОК ДЛЯ ВИЗУАЛОВ
+----------------------------------------
+local visualTick = 0
+local activeTrails = {}
+
+-- Функция для создания красивого следа (Trail) на перчатке
+local function applyGloveTrail(glove)
+	if not glove:IsA("Tool") or activeTrails[glove] then return end
+	
+	local handle = glove:FindFirstChild("Handle") or glove:FindFirstChildOfClass("BasePart")
+	if not handle then return end
+	
+	-- Создаем две точки, между которыми будет натянут след
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = handle
+	
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1, 0)
+	a1.Parent = handle
+	
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.35
+	trail.LightEmission = 0.8
+	trail.WidthScale = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	trail.Parent = handle
+	
+	activeTrails[glove] = {trail = trail, a0 = a0, a1 = a1}
+end
+
+game:GetService("RunService").RenderStepped:Connect(function()
+	if not blurButton or not blurButton.Parent then return end -- Защита от удаления меню
+	visualTick = visualTick + 1
+	
+	local player = game:GetService("Players").LocalPlayer
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	
+	-- Рассчитываем цвет радуги
+	local r = math.sin(visualTick * 0.05) * 127 + 128
+	local g = math.sin(visualTick * 0.05 + 2) * 127 + 128
+	local b = math.sin(visualTick * 0.05 + 4) * 127 + 128
+	local rainbowColor = Color3.fromRGB(r, g, b)
+	
+	-- 1. ЛОГИКА RGB СЛЕДА ДЛЯ ПЕРЧАТКИ
+	if char and visualSettings.gloveRgb then
+		local glove = char:FindFirstChildOfClass("Tool")
+		if glove then
+			applyGloveTrail(glove)
+			if activeTrails[glove] then
+				activeTrails[glove].trail.Enabled = true
+				activeTrails[glove].trail.Color = ColorSequence.new(rainbowColor)
+			end
+		end
+	else
+		-- Если выключено, гасим все активные трейлы
+		for glove, data in pairs(activeTrails) do
+			if data.trail and data.trail.Parent then data.trail.Enabled = false end
+		end
+	end
+	
+	-- 2. ЛОГИКА MOTION BLUR (РАЗМЫТИЯ) ОТ СКОРОСТИ
+	if root and hum and visualSettings.motionBlur then
+		local velocity = root.Velocity.Magnitude
+		if velocity > 16 then
+			-- Чем быстрее бежишь/летишь от шлепка, тем сильнее размытие экрана
+			blurEffect.Size = math.clamp((velocity - 16) * 0.3, 0, 12)
+		else
+			blurEffect.Size = 0
+		end
+	else
+		blurEffect.Size = 0
+	end
+end)
+
+
+-- =============================================================================
+-- КНОПКА KILL AURA (ВКЛАДКА COMBAT)
+-- =============================================================================
+
+local auraButton = Instance.new("TextButton")
+auraButton.Name = "AuraButton"
+auraButton.Size = UDim2.new(1, -20, 0, 40)
+auraButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0) -- Красный цвет боевых функций
+auraButton.Text = "  Килл Аура (Auto Slap) [ВЫКЛ]"
+auraButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+auraButton.Font = Enum.Font.GothamBold
+auraButton.TextSize = 14
+auraButton.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Привязываем к автоматическому списку Combat
+auraButton.Parent = pages["Combat"] 
+
+local auraCorner = Instance.new("UICorner")
+auraCorner.CornerRadius = UDim.new(0, 6)
+auraCorner.Parent = auraButton
+
+-- Таблица настроек ауры
+local auraSettings = {
+	enabled = false, -- По умолчанию выключена
+	distance = 15    -- Радиус удара
+}
+
+-- Переключение кнопкой
+auraButton.MouseButton1Click:Connect(function()
+	auraSettings.enabled = not auraSettings.enabled
+	if auraSettings.enabled then
+		auraButton.Text = "  Килл Аура (Auto Slap) [ВКЛ]"
+		auraButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+	else
+		auraButton.Text = "  Килл Аура (Auto Slap) [ВЫКЛ]"
+		auraButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+	end
+end)
+
+-- Функция активации перчатки
+local function slapTarget(targetChar)
+	local char = game:GetService("Players").LocalPlayer.Character
+	if not char then return end
+	local glove = char:FindFirstChildOfClass("Tool")
+	if glove then
+		glove:Activate()
+	end
+end
+
+-- Поток слежки за дистанцией
+task.spawn(function()
+	game:GetService("RunService").Heartbeat:Connect(function()
+		-- Если меню удалено, останавливаем поток полностью
+		if not auraButton or not auraButton.Parent then return end
+		if not auraSettings.enabled then return end
+
+		local myChar = game:GetService("Players").LocalPlayer.Character
+		local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+		if not myRoot then return end
+
+		for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+			if p ~= game:GetService("Players").LocalPlayer and p.Character then
+				local enemyChar = p.Character
+				local enemyRoot = enemyChar:FindFirstChild("HumanoidRootPart")
+				local enemyHumanoid = enemyChar:FindFirstChildOfClass("Humanoid")
+
+				if enemyRoot and enemyHumanoid and enemyHumanoid.Health > 0 then
+					local dist = (myRoot.Position - enemyRoot.Position).Magnitude
+					if dist <= auraSettings.distance then
+						slapTarget(enemyChar)
+					end
+				end
+			end
+		end
+	end)
+end)
+
+
+-- =============================================================================
+-- КНОПКА ВКЛЮЧЕНИЯ ESP И САМ ДВИЖОК (ВКЛАДКА VISUALS)
+-- =============================================================================
+
+local espButton = Instance.new("TextButton")
+espButton.Name = "EspButton"
+espButton.Size = UDim2.new(1, -20, 0, 40)
+espButton.BackgroundColor3 = Color3.fromRGB(120, 0, 150) -- Фиолетовый цвет для визуалов
+espButton.Text = "  ESP Силуэты и Инфо [ВЫКЛ]"
+espButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+espButton.Font = Enum.Font.GothamBold
+espButton.TextSize = 14
+espButton.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Привязываем к автоматическому списку Visuals
+espButton.Parent = pages["Visuals"] 
+
+local espCorner = Instance.new("UICorner")
+espCorner.CornerRadius = UDim.new(0, 6)
+espCorner.Parent = espButton
+
+-- Логика переключения кнопки
+espButton.MouseButton1Click:Connect(function()
+	flags.mainEsp = not flags.mainEsp
+	if flags.mainEsp then
+		espButton.Text = "  ESP Силуэты и Инфо [ВКЛ]"
+		espButton.BackgroundColor3 = Color3.fromRGB(160, 0, 200)
+	else
+		espButton.Text = "  ESP Силуэты и Инфо [ВЫКЛ]"
+		espButton.BackgroundColor3 = Color3.fromRGB(120, 0, 150)
+		
+		-- Принудительно очищаем ESP со всех игроков сразу при выключении
+		for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+			if p.Character then
+				if p.Character:FindFirstChild("HubHighlight") then p.Character.HubHighlight:Destroy() end
+				if p.Character:FindFirstChild("Head") and p.Character.Head:FindFirstChild("HubBillboard") then
+					p.Character.Head.HubBillboard:Destroy()
+				end
+			end
+		end
+	end
+end)
+
+-- База данных популярных перчаток Slap Battles
+local gloveData = {
+	["Overkill"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Error"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["God's Hand"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["The Flex"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Custom"] = {oneShot = "ДА ✅", power = "ВАНШОТ 🔥"},
+	["Default"] = {oneShot = "Нет 🗿", power = "30"},
+	["Extended"] = {oneShot = "Нет 🗿", power = "35"}
+}
+
+-- Стабильный поиск перчаток без падений скрипта
+local function getGlove(player)
+	local char = player.Character
+	if char then
+		local tool = char:FindFirstChildOfClass("Tool")
+		if tool then return tool.Name end
+	end
+	local ls = player:FindFirstChild("leaderstats")
+	if ls and ls:FindFirstChild("Glove") then return tostring(ls.Glove.Value) end
+	return "None"
+end
+
+-- Точечная и безопасная очистка объектов ESP при выключении функции
+local function clearESP(char)
+	if char and char:FindFirstChild("HubHighlight") then char.HubHighlight:Destroy() end
+	if char and char:FindFirstChild("Head") and char.Head:FindFirstChild("HubBillboard") then
+		char.Head.HubBillboard:Destroy()
+	end
+end
+
+-- Полностью изолированный цикл слежки (Force-сканирование арены)
+task.spawn(function()
+	while task.wait(0.4) do
+		-- Если меню было полностью "убито" кнопкой самоликвидации, останавливаем цикл навсегда
+		if not espButton or not espButton.Parent then break end 
+		
+		for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
+			if p ~= game:GetService("Players").LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+				local char = p.Character
+				local head = char.Head
+
+				if flags.mainEsp then
+					-- 1. Подсветка силуэта (Highlight)
+					local hl = char:FindFirstChild("HubHighlight")
+					if not hl then
+						hl = Instance.new("Highlight")
+						hl.Name = "HubHighlight"
+						hl.FillColor = Color3.fromRGB(255, 50, 50)
+						hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+						hl.FillTransparency = 0.5
+						hl.Parent = char
+					end
+					hl.Enabled = true
+
+					-- 2. Логика Текста
+					local isAnyTextActive = flags.gloves or flags.oneshot or flags.knockback
+					local bgui = head:FindFirstChild("HubBillboard")
+
+					if isAnyTextActive then
+						local tLabel
+						if not bgui then
+							bgui = Instance.new("BillboardGui")
+							bgui.Name = "HubBillboard"
+							bgui.AlwaysOnTop = true
+							bgui.Size = UDim2.new(0, 200, 0, 70)
+							bgui.ExtentsOffset = Vector3.new(0, 3.5, 0)
+							
+							tLabel = Instance.new("TextLabel")
+							tLabel.Name = "HubText"
+							tLabel.Size = UDim2.new(1, 0, 1, 0)
+							tLabel.BackgroundTransparency = 1
+							tLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+							tLabel.TextStrokeTransparency = 0
+							tLabel.Font = Enum.Font.GothamBold
+							tLabel.TextSize = 12
+							tLabel.Parent = bgui
+							bgui.Parent = head
+						else
+							tLabel = bgui:FindFirstChild("HubText")
+						end
+
+						if tLabel then
+							local currentGlove = getGlove(p)
+							local info = gloveData[currentGlove] or {oneShot = "Нет ❌", power = "Обычная"}
+
+							local text = "[" .. p.DisplayName .. "]"
+							if flags.gloves then text = text .. "\n🧤 Перчатка: " .. currentGlove end
+							if flags.oneshot then text = text .. "\n💀 Ваншот: " .. info.oneShot end
+							if flags.knockback then text = text .. "\n💥 Сила: " .. info.power end
+							
+							tLabel.Text = text
+							bgui.Enabled = true
+						end
+					else
+						if bgui then bgui:Destroy() end
+					end
+				else
+					clearESP(char)
+				end
+			end
+		end
+	end
+end)
+
+
+-- [ Вкладка 7: Teleport ]
+local mainIslandButton = Instance.new("TextButton")
+mainIslandButton.Name = "MainIslandButton"
+mainIslandButton.Size = UDim2.new(1, -20, 0, 40)
+mainIslandButton.BackgroundColor3 = Color3.fromRGB(220, 100, 0)
+mainIslandButton.Text = "  Центр Главного Острова"
+mainIslandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainIslandButton.Font = Enum.Font.GothamBold
+mainIslandButton.TextSize = 14
+mainIslandButton.TextXAlignment = Enum.TextXAlignment.Left
+mainIslandButton.Parent = pages["Teleport"]
+
+local mainIslandCorner = Instance.new("UICorner")
+mainIslandCorner.CornerRadius = UDim.new(0, 6)
+mainIslandCorner.Parent = mainIslandButton
+
+mainIslandButton.MouseButton1Click:Connect(function()
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	if myRoot then
+		myRoot.Velocity = Vector3.new(0, 0, 0)
+		myRoot.CFrame = CFrame.new(0, 5, 0)
+	end
+end)
+
+
+-- [ Вкладка 2: Other function ]
+local tycoonButton = Instance.new("TextButton")
+tycoonButton.Name = "TycoonButton"
+tycoonButton.Size = UDim2.new(1, -20, 0, 40)
+tycoonButton.BackgroundColor3 = Color3.fromRGB(240, 180, 0) -- Красивый золотой цвет
+tycoonButton.Text = "  Фарм перчатки Tycoon [ВЫКЛ]"
+tycoonButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+tycoonButton.Font = Enum.Font.GothamBold
+tycoonButton.TextSize = 14
+tycoonButton.TextXAlignment = Enum.TextXAlignment.Left
+tycoonButton.Parent = pages["Other function"]
+
+local tycoonCorner = Instance.new("UICorner")
+tycoonCorner.CornerRadius = UDim.new(0, 6)
+tycoonCorner.Parent = tycoonButton
+
+local tycoonFarmActive = false
+local tycoonBadgeId = 2129212001 -- ID оригинального бейджа Plate master в Slap Battles
+
+tycoonButton.MouseButton1Click:Connect(function()
+	tycoonFarmActive = not tycoonFarmActive
+	if tycoonFarmActive then
+		tycoonButton.Text = "  Фарм перчатки Tycoon [ВКЛ]"
+		tycoonButton.BackgroundColor3 = Color3.fromRGB(255, 210, 0)
+	else
+		tycoonButton.Text = "  Фарм перчатки Tycoon [ВЫКЛ]"
+		tycoonButton.BackgroundColor3 = Color3.fromRGB(240, 180, 0)
+	end
+end)
+
+-- Поток авто-удержания персонажа на тарелке тайкуна
+task.spawn(function()
+	RunService.RenderStepped:Connect(function()
+		if not tycoonFarmActive then return end
+		
+		local myChar = LocalPlayer.Character
+		local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+		local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
+		
+		if myRoot and myHumanoid then
+			local hasBadge = false
+			pcall(function()
+				hasBadge = BadgeService:UserHasBadgeAsync(LocalPlayer.UserId, tycoonBadgeId)
+			end)
+			
+			if hasBadge then
+				tycoonFarmActive = false
+				tycoonButton.Text = "  Tycoon ПОЛУЧЕН! ✅"
+				tycoonButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+				return
+			end
+			
+			if myRoot.Position.Y < -50 then 
+				local portal = Workspace:FindFirstChild("ArenaPortal") or Workspace:FindFirstChild("Portal")
+				if portal and portal:IsA("BasePart") then
+					myRoot.CFrame = portal.CFrame
+				end
+				return
+			end
+			
+			local plate = Workspace:FindFirstChild("Plate") or (Workspace:FindFirstChild("Arena") and Workspace.Arena:FindFirstChild("Plate"))
+			if plate and plate:IsA("BasePart") then
+				myRoot.Velocity = Vector3.new(0, 0, 0)
+				myRoot.CFrame = plate.CFrame * CFrame.new(0, 3.5, 0)
+			end
+		end
+	end)
+end)
+
+
+----------------------------------------------------
+-- СИСТЕМА ПЕРЕТАСКИВАНИЯ (DRAG)
+----------------------------------------------------
+local dragging, dragStart, startPos
+local function updateDrag(input)
+	local delta = input.Position - dragStart
+	mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+local function startDrag(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true; dragStart = input.Position; startPos = mainFrame.Position
+		input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+	end
+end
+sidebar.InputBegan:Connect(startDrag)
+mainFrame.InputBegan:Connect(function(input) if input.Target == mainFrame or input.Target == sidebar then startDrag(input) end end)
+UserInputService.InputChanged:Connect(function(input) 
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
+		updateDrag(input) 
+	end 
+end)
+
+-- =============================================================================
+-- СВОРAЧИВАНИЕ / РАЗВЕРТЫВАНИЕ И RGB ЭФФЕКТ
+-- =============================================================================
+
+local shrinkInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+
+minimizeButton.MouseButton1Click:Connect(function()
+	local cur = mainFrame.Position
+	local tween = TweenService:Create(mainFrame, shrinkInfo, {
+		Size = UDim2.new(0, 0, 0, 0), 
+		Position = UDim2.new(cur.X.Scale, cur.X.Offset + 260, cur.Y.Scale, cur.Y.Offset + 240)
+	})
+	tween:Play()
+	task.wait(0.3)
+	mainFrame.Visible = false
+	openButton.Visible = true
+end)
+
+openButton.MouseButton1Click:Connect(function()
+	mainFrame.Visible = true
+	local cur = mainFrame.Position
+	local tween = TweenService:Create(mainFrame, shrinkInfo, {
+		Size = UDim2.new(0, 520, 0, 480), 
+		Position = UDim2.new(cur.X.Scale, cur.X.Offset - 260, cur.Y.Scale, cur.Y.Offset - 240)
+	})
+	tween:Play()
+	openButton.Visible = false
+end)
+
+local tickCount = 0
+RunService.RenderStepped:Connect(function()
+	if currentActiveButton then
+		tickCount = tickCount + 1
+		local r = math.sin(tickCount * 0.04) * 127 + 128
+		local g = math.sin(tickCount * 0.04 + 2) * 127 + 128
+		local b = math.sin(tickCount * 0.04 + 4) * 127 + 128
+		currentActiveButton.BackgroundColor3 = Color3.fromRGB(r, g, b)
+	end
+end)
+
+
+-- =============================================================================
+-- КНОПКА ПОЛНОГО УНИЧТОЖЕНИЯ МЕНЮ И ВСЕХ ЕГО ФУНКЦИЙ
+-- =============================================================================
+
+local destroyButton = Instance.new("TextButton")
+destroyButton.Name = "DestroyMenuButton"
+destroyButton.Size = UDim2.new(1, -20, 0, 40)
+destroyButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0) -- Красный цвет (опасность)
+destroyButton.Text = "  💥 Убить меню (Выключить всё)"
+destroyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+destroyButton.Font = Enum.Font.GothamBold
+destroyButton.TextSize = 14
+destroyButton.TextXAlignment = Enum.TextXAlignment.Left
+mainFrame.Visible = false
+backgroundFrame.Visible = false
+
+-- Привязываем кнопку к вкладке Settings
+destroyButton.Parent = pages["Settings"] 
+
+local destroyCorner = Instance.new("UICorner")
+destroyCorner.CornerRadius = UDim.new(0, 6)
+destroyCorner.Parent = destroyButton
+
+-- Логика полного отключения
+destroyButton.MouseButton1Click:Connect(function()
+	-- 1. Принудительно отключаем все работающие тумблеры функций
+	tycoonFarmActive = false 
+	currentActiveButton = nil -- Останавливает цикл RGB-перелива
+	visualSettings.gloveRgb = false
+visualSettings.motionBlur = false
+if game:GetService("Lighting"):FindFirstChild("AdminMotionBlur") then
+	game:GetService("Lighting").AdminMotionBlur:Destroy()
+end
+for _, data in pairs(activeTrails) do
+	if data.trail then data.trail:Destroy() end
+	if data.a0 then data.a0:Destroy() end
+	if data.a1 then data.a1:Destroy() end
+end
+auraSettings.enabled = false
+-- Допишите это внутрь события клика вашей кнопки уничтожения меню:
+flags.mainEsp = false
+-- Вставьте это в самый верх скрипта к остальным переменным:
+local flags = {
+	mainEsp = false,
+	gloves = true,
+	oneshot = true,
+	knockback = true
+}
+abilityEffectActive = false
+airPlatformActive = false
+if workspace:FindFirstChild("AdminAirPlatform") then
+	workspace.AdminAirPlatform:Destroy()
+end
+currentSpeedValue = 16
+local char = game:GetService("Players").LocalPlayer.Character
+local hum = char and char:FindFirstChildOfClass("Humanoid")
+if hum then hum.WalkSpeed = 16 end
+stopFlying()
+
+	-- 2. Даем скриптам одну задержку кадра завершить циклы и удаляем GUI
+	task.wait()
+	screenGui:Destroy()
+end)
